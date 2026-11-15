@@ -1,186 +1,174 @@
-# Entity AからTrust Chainを確認する（Swagger UI / CUI）
+# 標準Endpointを叩きながらTrust Chainを組み立てる
 
-読者は一貫して **Entity Aの操作者** です。まず文書を集めてチェーンの構造を見て、次に同じ文書の署名を検証します。Entity BはAnchorの登録対象、Entity Cは未登録です。
+読者は **Entity Aの立場** で、Bの文書を取得し、上位Entityを見つけ、上位がBについて発行した文書を取得します。まず3文書の関係を確認し、その後に署名を検証します。CはAnchor未登録の負例です。
 
-## 1. 概念構成
+Swaggerが叩くのは各サービスの **`/.well-known/openid-federation` と `federation_fetch_endpoint`** です。Aに一括取得させるAPIはありません。デコード補助はブラウザー内だけで動きます。署名検証は読者が保存したJWTをAに渡す独立した手順です。
+
+## 概念とサービス
 
 ```text
-Entity A（読者）
-  ├─ 事前設定：信頼するTrust AnchorのEntity IDと公開鍵
-  ├─ Bを調べる → Bの自己署名文書 → AnchorのBについての署名文書 → Anchor
-  └─ Cを調べる → Cの自己署名文書 → AnchorのCについての署名文書がない
+読者（Entity Aの立場）
+  1. BのEntity ConfigurationをGET
+  2. authority_hintsからAnchorを見つけ、AnchorのEntity ConfigurationをGET
+  3. federation_fetch_endpointにsub=Bを指定してGET
+  4. 取得した3文書を並べてから、Aの事前設定したAnchor公開鍵で検証
+
+Entity B ── Anchor発行のSubordinate Statementがある ── Trust Anchor
+Entity C ── 自己署名は正しいが、AnchorのStatementがない
 ```
 
-`authority_hints` は取得先を探すヒントです。そこにAnchorのIDを書くだけでは所属の証拠になりません。BについてはAnchorが署名した **Subordinate Statement** があり、その中の公開鍵を使ってBの文書を検証できます。Cも正しい自己署名文書と同じヒントを公開しますが、AnchorはCのStatementを発行しません。
+| サービス | 役割 | ブラウザー入口 | Entity ID（内部HTTPS） |
+| --- | --- | --- | --- |
+| Entity A | 静的Swagger、デコード補助、ファイル署名検証コマンド | http://localhost:18766 | 検証者のみ。自身のECは公開しない |
+| Entity B | B自身のEntity Configuration | http://localhost:18767 | `https://entity-b:8443` |
+| Entity C | C自身のEntity Configuration | http://localhost:18768 | `https://entity-c:8443` |
+| Trust Anchor | AnchorのECとSubordinate Statement | http://localhost:18769 | `https://trust-anchor:8443` |
 
-A自身の登録はこの片方向の検証に必要ありません。この教材のAは検証者として動作し、自身のEntity Configurationは公開しません。「Bが信頼できる」は、ここではAの指定したAnchorまで署名による裏付けがつながるという限定した意味です。Bのあらゆる行動やサービス品質を保証する意味ではありません。
+4つは別コンテナです。SwaggerからのリクエストはブラウザーからB/C/Anchorへ直接届き、Aは通信を代行しません。各サービスは自分の秘密鍵だけを持ち、AnchorはBの公開鍵だけを登録しています。初回だけ動く `init` が教材用の鍵、TLS証明書、Bの登録、AへのAnchor公開鍵の配布を行います。
 
-## 2. マイクロサービス構成
+**HTTPとHTTPSの区別：** OIDFのEntity IDとEC取得先は仕様上HTTPSです。本教材のブラウザー入口は、証明書のOS登録なしでリクエストと生JWTを観察するためのローカルHTTP入口です。同じサービスの同じハンドラーで処理しますが、**このHTTP入口自体は仕様のHTTPS要件を満たしません**。JWT内のID・authority_hints・fetch endpointは内部HTTPSのままです。Swaggerでは表の対応先を選び、`sub` にはHTTPSのEntity IDを入力してください。正式なHTTPSの取得例も後述します。
 
-| コンテナ | 役割 | 持つもの |
-| --- | --- | --- |
-| `entity-a` | 読者のSwagger UI/API・CUI・取得・検証 | Anchorの公開鍵、TLS用公開証明書、取得した文書 |
-| `entity-b` | BのEntity Configurationを公開 | Bだけの署名秘密鍵・TLS秘密鍵 |
-| `entity-c` | CのEntity Configurationを公開 | Cだけの署名秘密鍵・TLS秘密鍵 |
-| `trust-anchor` | AnchorのEntity Configuration、BのSubordinate Statementを公開 | Anchorだけの秘密鍵、Bの登録公開鍵 |
+## 起動
 
-4サービスは同じイメージから別プロセスとして起動します。AがB/CとAnchorへ直接、内部ネットワークのHTTPS :8443で通信します。各コンテナは他者の秘密鍵をマウントしません。Aだけがブラウザー用ネットワークにも参加し、`127.0.0.1:18766` でSwagger UIと教材用APIを公開します。B/C/Anchorのホスト公開ポートはありません。
-
-別途 `init` が初回に終了するセットアップ処理として、教材用の鍵・証明書・Bの登録を用意します。これは通信を仲介するサービスではありません。初期設定者がAへAnchorの公開鍵を渡す操作を、この処理で再現しています。Aが相手から取得した公開鍵を無条件に信頼設定へ追加することはありません。
-
-TLS証明書はローカル教材用です。Aは事前に渡された証明書とホスト名を検証し、TLS検証を無効化しません。TLSの通信先認証と、FederationのAnchor公開鍵による信頼の検証は別の処理です。
-
-## 3. 起動
-
-前提：Docker EngineとDocker Compose v2。以下の通常操作はBashとPowerShellで共通です。WindowsではDockerが利用できるWSLのBashでも実行できます。Java/Mavenをホストへ入れる必要はありません。
+Docker Engine、Compose v2、Gitが必要です。
 
 ```sh
 git clone https://github.com/takuma-8trees/openid-federation-handson.git
 cd openid-federation-handson/cui
-docker compose up --build -d
-docker compose ps -a
+docker compose up --build --wait -d
 ```
 
-`init` は `Exited (0)`、他の4サービスは起動した状態になります。初回ビルドにはネットワーク接続が必要です。サブネットやポートが既存環境と重複する場合だけ `.env.example` を `.env` にコピーし、`CUI_SUBNET`・`A_SUBNET`・`A_PORT` を変更してください。旧UI版の起動ディレクトリとは異なります。
+[Swagger UI](http://localhost:18766/) を開きます。旧UI試作の18765とは別です。以前のSwaggerを開いていた場合は再読み込みしてください。表示される操作は **GETの2種類だけ** です。
 
-## Swagger UIで試す
+ポート・サブネットが重なる場合だけ `.env.example` を `.env` にコピーして変更します。公開先はすべて127.0.0.1です。
 
-[http://localhost:18766/](http://localhost:18766/) を開きます。旧UI試作の18765ではありません。
+## 1. BのEntity Configurationを取得する
 
-操作する行を開き、**Try it out → Execute** を押します。レスポンスの `steps` を上から読みます。最初は `target=B` で次の順に進めてください。
+Swaggerの **GET `/.well-known/openid-federation`** を開き、**Try it out** を押します。その後に表示される操作内の **ServersでEntity B** を選び、**Execute**。
 
-| 順番 | 操作 | 確認すること |
+- Request URL：`http://localhost:18767/.well-known/openid-federation`
+- HTTP 200、Content-Type：`application/entity-statement+jwt`
+- Response body：`eyJ...` のような、3部分をピリオドでつないだ署名付きJWT
+
+Swaggerの `Unrecognized response type; displaying content as text.` はJWTを文字列表示している案内です。HTTP 200なら取得失敗ではありません。
+
+Response bodyを [JWTを読む補助](http://localhost:18766/jwt.html) に貼り付け、デコードします。この補助は送信・取得・署名検証をしません。
+
+```text
+iss = https://entity-b:8443
+sub = https://entity-b:8443
+authority_hints = [https://trust-anchor:8443]
+jwks = Bの公開鍵
+```
+
+ここで初めて、次に問い合わせる候補がAnchorだと分かります。ヒントはBの自己申告であり、Anchorによる承認ではありません。
+
+SwaggerのResponse bodyの **Download** で保存し、ファイル名を `b.jwt` にして、このリポジトリの **`cui/inbox/`** に置きます。保存時はJWT本文だけにし、JSONや引用符で包みません。次の取得後も同じ3文書を使うためです。
+
+## 2. AnchorのEntity Configurationを取得する
+
+同じ `/.well-known/openid-federation` 操作の **ServersをTrust Anchorへ変更** してExecuteします。JWTを補助で読みます。
+
+```text
+iss = sub = https://trust-anchor:8443
+metadata.federation_entity.federation_fetch_endpoint
+  = https://trust-anchor:8443/fetch
+```
+
+これで次に使うfetch endpointが分かりました。`/fetch` という名前そのものが仕様で固定されているわけではありません。**このメタデータに記載されたURLを使う**のが仕様です。
+
+同じ方法でJWTを **`cui/inbox/anchor.jwt`** に保存します。
+
+## 3. AnchorがBについて発行した文書を取得する
+
+Swaggerの **GET `/fetch`** を開きます。送信先はAnchorです。Try it outを押し、`sub` にBのECで確認した値を貼り付けます。
+
+```text
+https://entity-b:8443
+```
+
+Executeすると `http://localhost:18769/fetch?sub=https%3A%2F%2Fentity-b%3A8443` にGETします。HTTP 200のJWTをデコードし、**`cui/inbox/b-subordinate.jwt`** に保存します。
+
+```text
+iss = https://trust-anchor:8443
+sub = https://entity-b:8443
+jwks = AnchorがBのものとして示した公開鍵
+```
+
+ここまでの3文書を比べます。**まだ署名は検証していません。**
+
+| 文書 | iss（誰が発行） | sub（誰について） |
 | --- | --- | --- |
-| 1 | `GET /api/trust` | Aが事前に信頼するAnchorのIDと公開鍵 |
-| 2 | `POST /api/chains/{target}/fetch` | 3文書を取得。`status=UNVERIFIED`、`complete=true` |
-| 3 | `GET /api/chains/{target}` | `steps` のiss/subを比較。`documents` に署名付き文書とデコード結果 |
-| 4 | `POST /api/chains/{target}/verify` | 保存した同じ文書を検証。HTTP 200、`status=TRUSTED` |
+| BのEC | B | B |
+| BのSubordinate Statement | Anchor | B |
+| AnchorのEC | Anchor | Anchor |
 
-**3でチェーンの構造を見てから、4の検証へ進んでください。** `documents` はleaf（対象の自己署名）、subordinate（Anchorが対象について署名）、anchor（Anchorの自己署名）の順です。デコード表示では署名検証を行いません。
+Bの自己申告に加え、AnchorがBについて署名する文書が1つ間に入りました。
 
-次に各操作の `target` を **C** に変えて、2〜4を繰り返します。2はHTTP 200でも `complete=false`、3ではsubordinateが `missing`。4は **HTTP 422 / NOT_TRUSTED** になり、自己署名のPASSに続いて `MISSING_SUBORDINATE` と表示されます。これが期待する負例です。取得前の3/4はHTTP 409で取得を促します。
+## 4. 保存した3文書をAで検証する
 
-Swagger UI/APIとCUIは同じAの取得・検証処理と保存データを使います。下記 `/api` は教材用の操作APIであり、OpenID Federationの標準endpointではありません。OpenAPI定義は [openapi.json](src/main/resources/openapi.json)。Swagger UI **5.34.1** の配布資材を固定ハッシュでビルド時に取得し、Aから配信します。閲覧時のCDN通信は不要です。
-
-以下は同じ流れをCUIで確認する手順です。
-
-## 4. まずBのChainを確認する
-
-### Aが誰を信頼しているか見る
+`cui/` で実行します。最初にAが事前設定した信頼起点を見ます。
 
 ```sh
 docker compose exec -T entity-a entity-a trust show
+docker compose exec -T entity-a entity-a chain verify-files B /inbox/b.jwt /inbox/b-subordinate.jwt /inbox/anchor.jwt
 ```
 
-AnchorのIDと、Aに事前設定された公開鍵のSHA-256 thumbprintが出ます。これはネットワークから取得したBの自己申告とは独立した出発点です。
-
-### 文書を取得する（まだ検証しない）
-
-```sh
-docker compose exec -T entity-a entity-a chain fetch B
-```
-
-3回のHTTP 200を確認します。
-
-1. Bの `/.well-known/openid-federation` からBのEntity Configurationを取得。
-2. `authority_hints` をたどり、AnchorのEntity Configurationを取得。
-3. Anchorの `federation_fetch_endpoint` に `sub=https://entity-b:8443` を指定し、BのSubordinate Statementを取得。
-
-最後に `COLLECTED` と出ます。これは文書がそろったという意味で、信頼できるという判定ではありません。
-
-### 誰が誰について述べているか読む
-
-```sh
-docker compose exec -T entity-a entity-a chain show B
-```
-
-```text
-[leaf] iss=https://entity-b:8443
-  sub=https://entity-b:8443
-[subordinate] iss=https://trust-anchor:8443
-  sub=https://entity-b:8443
-[anchor] iss=https://trust-anchor:8443
-  sub=https://trust-anchor:8443
-```
-
-`iss` は発行者、`sub` は対象です。leafとanchorは自分についての文書です。間の文書だけが **AnchorからBへの裏付け** になっています。
-
-```sh
-docker compose exec -T entity-a entity-a chain show B --json
-```
-
-詳しく見る場合はJWTヘッダー・claims・署名付きJWT全体を表示します。Bの `authority_hints`、Anchorのfetch endpoint、Subordinate Statementの `jwks`（Bの公開鍵）を探してください。デコードして読めることと、署名が正しいことは別です。
-
-## 5. 同じChainをAで検証する
-
-```sh
-docker compose exec -T entity-a entity-a chain verify B
-```
-
-検証は保存済みの文書を使い、再取得しません。自己署名、iss/sub、有効期限、事前設定したAnchor公開鍵、Anchorの署名、Anchorが示したBの鍵によるBの署名を確認します。最後が次のようになれば成功です。
+このコマンドは **指定したファイルを読み、通信せずに検証** します。自動取得した別文書への置き換えはありません。各署名・iss/sub・有効期限のPASSに続き、最後に次が出ます。
 
 ```text
 TRUSTED: https://entity-b:8443 -> https://trust-anchor:8443
 ```
 
-## 6. Cではどこで途切れるか確認する
+`inbox` はAに読み取り専用でマウントされます。ファイル名が違う場合はコマンドのパスも合わせてください。期限は発行から1時間です。期限切れなら標準Endpointから再度取得します。
+
+## 5. Cでも同じEndpointを叩く
+
+1. EC操作のServersをEntity CにしてExecute。自己署名JWTをデコードし、`authority_hints` が同じAnchorを指すことを確認。`cui/inbox/c.jwt` に保存。
+2. AnchorのECを取得してfetch endpointを確認。
+3. `/fetch` のsubを **`https://entity-c:8443`** に変更しExecute。
+
+Anchorから **HTTP 404 / `not_found`** が返ります。Cの文書が読めても、AnchorはCのSubordinate Statementを発行しません。JSONエラーをJWTとして保存しないでください。
 
 ```sh
-docker compose exec -T entity-a entity-a chain fetch C
-docker compose exec -T entity-a entity-a chain show C
-docker compose exec -T entity-a entity-a chain verify C
+docker compose exec -T entity-a entity-a chain verify-files C /inbox/c.jwt - /inbox/anchor.jwt
 ```
 
-取得時はCの文書・Anchorの文書がHTTP 200、CのSubordinate Statementが **HTTP 404 / not_found** になります。`show` では `[subordinate] MISSING` と表示されます。
-
-`verify` ではCの自己署名とAnchorの署名はPASSしますが、次で止まります。
+`-` はSubordinate Statementがないことを明示します。Cの自己署名はPASSしますが、最後は次です（終了コード2、期待する負例）。
 
 ```text
 NOT_TRUSTED: MISSING_SUBORDINATE: Anchorが対象について発行したStatementがない
 ```
 
-これは期待する負例です。終了コードは **2**（検証拒否）。Bの成功は0、通信エラー・操作エラーは1です。B/Cを固定値で成功・失敗に分岐させず、取得できた署名文書で判断します。
+## 正式なHTTPSのEndpointをAから1つずつ叩く場合
 
-## 7. 通信と保存内容を確かめる
+Swagger用HTTP入口との違いを確認するための補足です。Aコンテナにはcurlとローカル証明書があります。`-k` は使いません。リダイレクトはホストのファイルへ保存するため、以下は **Bash / WSL** で実行してください。
+
+```sh
+docker compose exec -T entity-a curl --cacert /data/entity-b.pem https://entity-b:8443/.well-known/openid-federation > inbox/b.jwt
+docker compose exec -T entity-a entity-a document decode /inbox/b.jwt
+# 上のauthority_hintsを読んで次のURLを決める
+docker compose exec -T entity-a curl --cacert /data/trust-anchor.pem https://trust-anchor:8443/.well-known/openid-federation > inbox/anchor.jwt
+docker compose exec -T entity-a entity-a document decode /inbox/anchor.jwt
+# 上のfederation_fetch_endpointを読み、Bのsubを指定する
+docker compose exec -T entity-a curl --cacert /data/trust-anchor.pem --get --data-urlencode sub=https://entity-b:8443 https://trust-anchor:8443/fetch > inbox/b-subordinate.jwt
+```
+
+その後は同じ `verify-files` コマンドで検証できます。正式なHTTPSのURL、標準パラメーター、生JWTを1回ずつ確認でき、自動探索APIは使いません。
+
+## ログ・停止・検証範囲
 
 ```sh
 docker compose logs entity-b entity-c trust-anchor
-docker compose exec -T entity-a cat /data/B/snapshot.json
-docker compose exec -T entity-a cat /data/C/snapshot.json
-```
-
-ログには別サービスへ届いたGETとHTTPステータスが残ります。snapshotには取得時刻と署名付きJWT、CについてはAnchorのエラー応答が残ります。`show` は常にデコード表示として扱い、過去の検証成功を保存・表示しません。1時間を過ぎて文書が失効したら `fetch` からやり直してください。
-
-## 8. 停止・再実行
-
-```sh
 docker compose down
-docker compose up -d
 ```
 
-通常の停止では専用ボリューム内の鍵・登録・snapshotが残ります。TLS証明書の有効期間は生成から365日です。
+各サービスのログで実際のGETとHTTPコードを確認できます。通常のdownでは鍵・登録・inboxのファイルは残ります。初期化し直す場合に限り `cui/` で `docker compose down --volumes` を実行すると鍵が消えます。次回起動で新しい鍵になり、以前のJWTは使えません。inboxのファイルはホスト上なのでこの操作では消えません。
 
-初期状態からやり直す場合だけ、**`cui/` にいることを確認して**次を実行します。CUI専用ボリュームの鍵と取得済みデータが消え、次の起動で新しい鍵になります。
+Java 21、Nimbus SDK 11.38.2、Swagger UI 5.34.1。Nimbusが署名とTrust Chainを検証し、サービス・教材用初期化・CUIは自作です。提供された参考実装を設計の参考にしています。Swagger配布資材はビルド時に固定SHA-512で検証し、閲覧時のCDNは不要です。
 
-```sh
-docker compose down --volumes
-docker compose up -d
-```
+対象はRS256、B/Cから単一Anchorまでの直接チェーン。Metadata Policy、Trust Marks、Constraints、中間Entity、鍵ローテーション、OIDCログイン・クライアント登録は対象外。未対応claimは検証で拒否します。所属の審査基準をOIDFが自動で決めるわけではなく、この教材では初期設定者がBだけを登録しています。
 
-## 検証スクリプト・実装範囲
+開発者用：`sh run/smoke-endpoints.sh`（Python 3標準ライブラリ使用）で標準Endpoint・生JWT・ファイル検証を確認します。JUnit7件はDockerビルドで実行。既存の `chain fetch/show/verify` は内部回帰チェック用に残していますが、読者向け手順では使いません。旧 `/api/trust`・`/api/chains` は削除しました。
 
-開発側の再現チェックは、起動後に `cui/` で `sh run/smoke-test.sh`（Bash/WSL）を実行します。読者は先に上記コマンドを1つずつ試してください。Dockerビルド時には暗号検証のJUnitテストも走ります。
-
-APIの再現チェックは `sh run/smoke-api.sh`（開発者用、Python 3標準ライブラリを使用）。新規ボリュームで取得前の409も確認する場合は `sh run/smoke-api.sh http://localhost:18766 --fresh`。通常のハンズオンではこのスクリプトの実行は不要です。
-
-- Java 21 / Nimbus OAuth 2.0 & OIDC SDK **11.38.2**。提供された参考実装と同じライブラリ系列を使い、EntityStatementとTrustChainの署名検証を利用しています。提供されたアプリ自体を起動する構成ではありません。
-- 自作：HTTPS公開サービス、初期教材データ、取得・保存・CUI、直接チェーン用の検証条件。
-- 対象は **BまたはC → 単一Anchor**、RS256、`federation_entity` メタデータの教材用部分集合。任意URLをたどる汎用Resolverではありません。取得先は固定した教材ホストに限定します。
-- Metadata Policy、Constraints、Trust Marks、中間Entity、鍵ローテーション、OIDCログイン、クライアント登録は扱いません。未対応のStatement claimが含まれた場合は検証を拒否します。
-- Anchorが誰を登録すべきかという組織上の審査は、このプロトコルが自動で決めるものではありません。教材では初期設定者がBだけを登録しています。
-
-実装は `src/main/java/local/cui/` の `Main`（起動）、`Material`（初期設定）、`Publisher`（HTTPS配信）、`Statements`（署名発行）、`Reader`（CUI・取得・保存）、`Verification`（検証）に分かれています。
-
-`ReaderApi` がSwagger配信とAの操作APIを担当し、`Reader` と `Verification` を共用します。ブラウザー操作もAの立場からのみ行います。
-
-規範・参照：[OpenID Federation 1.0 Final](https://openid.net/specs/openid-federation-1_0-final.html) のSections 3・4・8.1・9、[Nimbus Federation examples](https://connect2id.com/products/nimbus-oauth-openid-connect-sdk/examples/openid-connect/federation)。完全な仕様実装・適合認証を主張するものではありません。実測は [検証記録](../evidence/cui-verification.md) を参照してください。
+規範：[OpenID Federation 1.0 Final](https://openid.net/specs/openid-federation-1_0-final.html) Sections 3・4・8.1・9。[実測記録](../evidence/standard-endpoints.md)。仕様全体への適合認証を主張する教材ではありません。

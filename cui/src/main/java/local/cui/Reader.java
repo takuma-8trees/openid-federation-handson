@@ -16,6 +16,22 @@ final class Reader {
     Reader(java.io.PrintStream out) { this.out = out; }
     static int run(String[] args) throws Exception { return new Reader(System.out).execute(args); }
     int execute(String[] args) throws Exception {
+        if (args.length == 3 && args[0].equals("document") && args[1].equals("decode")) {
+            var jwt = readJwt(args[2]);
+            out.println("DECODED ONLY — 未検証");
+            out.println(jwt.getHeader().toString());
+            out.println(JSONObjectUtils.toJSONString(jwt.getJWTClaimsSet().toJSONObject()));
+            return 0;
+        }
+        if (args.length == 6 && args[0].equals("chain") && args[1].equals("verify-files") && Set.of("B", "C").contains(args[2])) {
+            var leaf = readJwt(args[3]);
+            var subordinate = args[4].equals("-") ? null : readJwt(args[4]);
+            var anchor = readJwt(args[5]);
+            try {
+                Verification.verify(Statements.id("entity-" + args[2].toLowerCase(Locale.ROOT)), leaf, subordinate, anchor, pin(), Instant.now(), out::println);
+                return 0;
+            } catch (Exception e) { out.println("NOT_TRUSTED: " + e.getMessage()); return 2; }
+        }
         if (Arrays.equals(args, new String[]{"trust", "show"})) {
             out.println("Entity Aの事前設定（ネットワークから自動採用しない）");
             out.println("Trust Anchor: " + Statements.ANCHOR);
@@ -42,6 +58,7 @@ final class Reader {
         return 0;
     }
     private static JWKSet pin() throws Exception { return JWKSet.parse(Files.readString(DATA.resolve("anchor-jwks.json"))); }
+    private static SignedJWT readJwt(String file) throws Exception { return SignedJWT.parse(Files.readString(Path.of(file)).strip().replace("\uFEFF", "")); }
     private static SignedJWT parse(Map<String,Object> docs, String name) throws Exception {
         return docs.get(name) == null ? null : SignedJWT.parse((String) docs.get(name));
     }

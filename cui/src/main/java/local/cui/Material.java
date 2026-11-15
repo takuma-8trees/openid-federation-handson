@@ -16,6 +16,7 @@ final class Material {
                 if (!Files.exists(base.resolve(host).resolve("signing.jwk")) || !Files.exists(base.resolve(host).resolve("tls.p12")))
                     throw new IllegalStateException("Incomplete fixture; restore all CUI volumes together");
             }
+            publicPem(a);
             System.out.println("Existing CUI fixture retained"); return;
         }
         Files.createDirectories(a);
@@ -34,7 +35,14 @@ final class Material {
         Files.writeString(a.resolve("anchor-jwks.json"), new JWKSet(anchor.toPublicJWK()).toString());
         Files.writeString(base.resolve("trust-anchor/registered-b.json"), new JWKSet(key(base.resolve("entity-b/signing.jwk")).toPublicJWK()).toString());
         Files.writeString(a.resolve("ready"), "CUI fixture v1\n");
+        publicPem(a);
         System.out.println("Provisioned: A trusts Anchor; Anchor registers B only. C is unregistered.");
+    }
+    private static void publicPem(Path a) throws Exception {
+        for (String host : List.of("entity-b", "entity-c", "trust-anchor")) {
+            String encoded = Base64.getMimeEncoder(64, new byte[]{'\n'}).encodeToString(Files.readAllBytes(a.resolve(host + ".cer")));
+            Files.writeString(a.resolve(host + ".pem"), "-----BEGIN CERTIFICATE-----\n" + encoded + "\n-----END CERTIFICATE-----\n");
+        }
     }
     private static void keytool(String... args) throws Exception {
         var command = new ArrayList<>(List.of("keytool")); command.addAll(List.of(args));

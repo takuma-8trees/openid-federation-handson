@@ -20,7 +20,7 @@ final class Publisher {
         var ssl = SSLContext.getInstance("TLS"); ssl.init(km.getKeyManagers(), null, null);
         var server = HttpsServer.create(new InetSocketAddress(8443), 0);
         server.setHttpsConfigurator(new HttpsConfigurator(ssl));
-        server.createContext("/", exchange -> {
+        HttpHandler handler = exchange -> {
             int status = 500; String body; String type = "application/json";
             try {
                 String path = exchange.getRequestURI().getPath();
@@ -42,11 +42,22 @@ final class Publisher {
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", type);
             exchange.getResponseHeaders().set("Cache-Control", "no-store");
+            String origin = exchange.getRequestHeaders().getFirst("Origin");
+            String allowed = "http://localhost:" + System.getenv().getOrDefault("A_PORT", "18766");
+            if (allowed.equals(origin)) {
+                exchange.getResponseHeaders().set("Access-Control-Allow-Origin", allowed);
+                exchange.getResponseHeaders().set("Vary", "Origin");
+            }
             exchange.sendResponseHeaders(status, bytes.length);
             try (var out = exchange.getResponseBody()) { out.write(bytes); }
             System.out.println(host + " " + exchange.getRequestMethod() + " " + exchange.getRequestURI() + " -> " + status);
-        });
+        };
+        server.createContext("/", handler);
         server.start(); System.out.println(host + " listening on HTTPS :8443");
+        // Loopback-published teaching transport; the exact same endpoint handler, no proxy.
+        var browser = HttpServer.create(new InetSocketAddress(8080), 0);
+        browser.createContext("/", handler);
+        browser.start(); System.out.println(host + " browser teaching transport on HTTP :8080");
     }
     private static String error(String code, String description) {
         return com.nimbusds.jose.util.JSONObjectUtils.toJSONString(Map.of("error", code, "error_description", description));

@@ -1,365 +1,107 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Entity AからTrust Chainを確認する",
-    "version": "0.2.0",
-    "description": "読者はEntity Aの操作者です。**1 → 2 → 3 → 4**の順で操作してください。各行を開き、**Try it out → Execute**で実行します。まずtarget=B、次にCで2〜4を繰り返します。\n\nBはTrust Anchorに登録済み。Cは自己署名が正しくても未登録です。取得と検証を分け、先にChainの構造を確認します。\n\nここにある `/api` はAを操作する教材用APIです。OpenID Federationの標準endpointではありません。Aが別コンテナのB/C/AnchorへHTTPSでアクセスします。"
+    "title": "OpenID Federationの標準Endpointを直接叩く",
+    "version": "0.3.0",
+    "description": "読者はEntity Aの立場です。SwaggerはB/C/Anchorへ直接GETし、応答のJWTをそのまま表示します。Aの取得代行APIはありません。\n\n**手順：** ①Entity ConfigurationのServersでBを選び実行 → ②[JWTを読む補助](/jwt.html)に応答を貼り、authority_hintsを読む → ③ServersをAnchorに変え実行し、federation_fetch_endpointを読む → ④FetchのsubへBのEntity IDを入力して実行。3文書を揃えてから別コマンドで署名を検証します。その後Cで同じ操作を行います。\n\n**通信の区別：** Entity IDはコンテナ内HTTPSです。ブラウザー用には同じサービス・同じハンドラーのローカルHTTP入口を公開しています。HTTP入口自体は仕様のHTTPS要件を満たしません。URLの対応はServersの説明で確認してください。JWT内のIDやsubはHTTPSの値を使います。"
   },
-  "servers": [
-    {
-      "url": "/"
-    }
-  ],
-  "tags": [
-    {
-      "name": "Entity Aの操作"
-    }
-  ],
   "paths": {
-    "/api/trust": {
+    "/.well-known/openid-federation": {
       "get": {
+        "operationId": "entityConfiguration",
         "tags": [
-          "Entity Aの操作"
+          "1. Entity Configuration"
         ],
-        "operationId": "showTrust",
-        "summary": "1. Aが信頼するAnchorを見る",
-        "description": "ネットワークから採用した値ではなく、Aに事前設定されたAnchorのIDと公開鍵thumbprintを表示します。",
+        "summary": "対象のEntity Configurationを1つ取得する",
+        "description": "Try it outを押すとServersが表示されます。Bを選び、Execute。Response bodyは未検証の自己署名JWTです。Downloadで保存し、別タブのJWT補助で読みます。authority_hintsで分かった上位EntityにServersを切り替え、もう一度このEndpointを叩いてください。",
+        "servers": [
+          {
+            "url": "http://localhost:__B_PORT__",
+            "description": "Entity B — Entity ID: https://entity-b:8443"
+          },
+          {
+            "url": "http://localhost:__TA_PORT__",
+            "description": "Trust Anchor — Entity ID: https://trust-anchor:8443"
+          },
+          {
+            "url": "http://localhost:__C_PORT__",
+            "description": "Entity C — Entity ID: https://entity-c:8443"
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Aでの操作結果。stepsを上から読み、表示時はdocumentsのiss/subも比べてください。",
+            "description": "署名付きEntity Configuration。そのまま保存し、デコードと署名検証を区別してください。",
             "content": {
-              "application/json": {
+              "application/entity-statement+jwt": {
                 "schema": {
-                  "$ref": "#/components/schemas/Result"
+                  "type": "string"
                 },
-                "example": {
-                  "actor": "Entity A",
-                  "operation": "trust",
-                  "status": "CONFIGURED",
-                  "steps": [
-                    "実行後のServer responseで、実際の文書・検証結果を確認してください。"
-                  ]
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "通信・処理エラー。stepsではなくerror/messageを確認してください。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
+                "example": "<header>.<payload>.<signature>"
               }
             }
           }
         }
       }
     },
-    "/api/chains/{target}/fetch": {
-      "post": {
-        "tags": [
-          "Entity Aの操作"
-        ],
-        "operationId": "fetchChain",
-        "summary": "2. Chainの文書を取得する（未検証）",
-        "description": "Aが対象のEntity Configuration、AnchorのEntity Configuration、対象のSubordinate Statementを取得・保存します。HTTP 200は取得操作の成功です。Cではcomplete=false。まだ信頼の判定はしません。",
-        "responses": {
-          "200": {
-            "description": "Aでの操作結果。stepsを上から読み、表示時はdocumentsのiss/subも比べてください。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Result"
-                },
-                "example": {
-                  "actor": "Entity A",
-                  "operation": "fetch",
-                  "status": "UNVERIFIED",
-                  "steps": [
-                    "実行後のServer responseで、実際の文書・検証結果を確認してください。"
-                  ],
-                  "target": "B",
-                  "complete": true
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "通信・処理エラー。stepsではなくerror/messageを確認してください。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "target",
-            "in": "path",
-            "required": true,
-            "description": "まずBで成功例を確認し、その後Cで同じ操作を試します。",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "B",
-                "C"
-              ],
-              "default": "B"
-            }
-          }
-        ]
-      }
-    },
-    "/api/chains/{target}": {
+    "/fetch": {
       "get": {
+        "operationId": "fetchSubordinate",
         "tags": [
-          "Entity Aの操作"
+          "2. Subordinate Statement"
         ],
-        "operationId": "showChain",
-        "summary": "3. Chainの構造と文書を確認する（未検証）",
-        "description": "stepsでiss/subを比べてから、documentsのclaimsを読みます。leafとanchorは自己申告、subordinateはAnchorから対象への裏付けです。Cはsubordinateがmissingになります。",
-        "responses": {
-          "200": {
-            "description": "Aでの操作結果。stepsを上から読み、表示時はdocumentsのiss/subも比べてください。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Result"
-                },
-                "example": {
-                  "actor": "Entity A",
-                  "operation": "show",
-                  "status": "UNVERIFIED",
-                  "steps": [
-                    "実行後のServer responseで、実際の文書・検証結果を確認してください。"
-                  ],
-                  "target": "B",
-                  "complete": true
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "まだ取得していません。2のfetchを先に実行してください。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "通信・処理エラー。stepsではなくerror/messageを確認してください。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
+        "summary": "上位Entityから、subについてのStatementを1つ取得する",
+        "description": "この/fetchというパスは本教材のAnchorが選んだ値です。パス名が仕様で固定されているわけではありません。AnchorのEntity Configuration内のmetadata.federation_entity.federation_fetch_endpointから見つけます。subに対象のEntity IDを貼り付けて実行してください。Cは404/not_found。",
+        "servers": [
+          {
+            "url": "http://localhost:__TA_PORT__",
+            "description": "Trust Anchor — https://trust-anchor:8443/fetch のローカルHTTP入口"
           }
-        },
+        ],
         "parameters": [
           {
-            "name": "target",
-            "in": "path",
+            "name": "sub",
+            "in": "query",
             "required": true,
-            "description": "まずBで成功例を確認し、その後Cで同じ操作を試します。",
+            "description": "対象のEntity Configurationから読んだsubを貼り付けます。例：https://entity-b:8443（Cなら https://entity-c:8443）。localhostのURLではありません。",
             "schema": {
               "type": "string",
-              "enum": [
-                "B",
-                "C"
-              ],
-              "default": "B"
+              "format": "uri"
             }
           }
-        ]
-      }
-    },
-    "/api/chains/{target}/verify": {
-      "post": {
-        "tags": [
-          "Entity Aの操作"
         ],
-        "operationId": "verifyChain",
-        "summary": "4. 保存したChainを検証する",
-        "description": "同じ保存済み文書を検証し、ネットワークから再取得しません。Bは200/TRUSTED。Cは自己署名のPASS後、422/NOT_TRUSTEDになります。422は期待する負例です。",
         "responses": {
           "200": {
-            "description": "Aでの操作結果。stepsを上から読み、表示時はdocumentsのiss/subも比べてください。",
+            "description": "Anchor署名のSubordinate Statement。issはAnchor、subは要求した対象。jwksは対象の公開鍵。",
             "content": {
-              "application/json": {
+              "application/entity-statement+jwt": {
                 "schema": {
-                  "$ref": "#/components/schemas/Result"
-                },
-                "example": {
-                  "actor": "Entity A",
-                  "operation": "verify",
-                  "status": "TRUSTED",
-                  "steps": [
-                    "実行後のServer responseで、実際の文書・検証結果を確認してください。"
-                  ],
-                  "target": "B",
-                  "complete": true
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "まだ取得していません。2のfetchを先に実行してください。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "チェーン検証で拒否。CではMISSING_SUBORDINATEが期待結果。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Result"
-                },
-                "example": {
-                  "actor": "Entity A",
-                  "operation": "verify",
-                  "target": "C",
-                  "status": "NOT_TRUSTED",
-                  "complete": false,
-                  "steps": [
-                    "PASS: Entity Configurationの自己署名・iss/sub・有効期限（所属の証明ではない）",
-                    "PASS: AnchorのEntity ConfigurationをAに事前設定した公開鍵で検証",
-                    "NOT_TRUSTED: MISSING_SUBORDINATE: Anchorが対象について発行したStatementがない"
-                  ]
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "通信・処理エラー。stepsではなくerror/messageを確認してください。",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "target",
-            "in": "path",
-            "required": true,
-            "description": "まずBで成功例を確認し、その後Cで同じ操作を試します。",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "B",
-                "C"
-              ],
-              "default": "B"
-            }
-          }
-        ]
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "Result": {
-        "type": "object",
-        "required": [
-          "actor",
-          "operation",
-          "status",
-          "steps"
-        ],
-        "properties": {
-          "actor": {
-            "type": "string",
-            "example": "Entity A"
-          },
-          "operation": {
-            "type": "string",
-            "enum": [
-              "trust",
-              "fetch",
-              "show",
-              "verify"
-            ]
-          },
-          "target": {
-            "type": "string",
-            "enum": [
-              "B",
-              "C"
-            ]
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "CONFIGURED",
-              "UNVERIFIED",
-              "TRUSTED",
-              "NOT_TRUSTED"
-            ]
-          },
-          "steps": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "complete": {
-            "type": "boolean",
-            "description": "文書が揃ったか。信頼できるかの判定ではありません。"
-          },
-          "fetched_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "documents": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "role": {
-                  "type": "string",
-                  "enum": [
-                    "leaf",
-                    "subordinate",
-                    "anchor"
-                  ]
-                },
-                "header": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "claims": {
-                  "type": "object",
-                  "additionalProperties": true
-                },
-                "compact_jwt": {
                   "type": "string"
                 },
-                "missing": {
+                "example": "<header>.<payload>.<signature>"
+              }
+            }
+          },
+          "400": {
+            "description": "subがない、またはAnchor自身を指定した。"
+          },
+          "404": {
+            "description": "その対象についてのStatementがない。Cではこれが期待結果。",
+            "content": {
+              "application/json": {
+                "schema": {
                   "type": "object",
-                  "additionalProperties": true
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "error_description": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "not_found",
+                  "error_description": "No subordinate statement for https://entity-c:8443"
                 }
               }
             }

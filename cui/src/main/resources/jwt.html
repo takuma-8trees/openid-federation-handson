@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>JWTを読む補助（未検証）</title>
+<style>body{font:16px system-ui;max-width:900px;margin:32px auto;padding:0 20px}textarea{width:100%;height:150px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f4f6;padding:16px}button{padding:10px 20px;margin-top:12px}</style></head>
+<body><a href="/">標準EndpointのSwaggerへ戻る</a><h1>JWTを読む補助</h1>
+<p>SwaggerのResponse bodyを貼り付けます。処理はこのブラウザー内だけで行い、送信・再取得・署名検証は行いません。</p>
+<label for="jwt">署名付きJWT（header.payload.signature）</label><textarea id="jwt" spellcheck="false"></textarea>
+<button id="decode">デコードする（未検証）</button><p id="status" role="status"></p><pre id="result"></pre>
+<script>
+document.getElementById('decode').addEventListener('click', () => {
+  const result = document.getElementById('result');
+  try {
+    const parts = document.getElementById('jwt').value.trim().split('.');
+    if(parts.length !== 3) throw new Error('JWTは3つの部分がピリオドで区切られています。Response bodyだけを貼り付けてください。');
+    const parse = value => JSON.parse(new TextDecoder('utf-8', {fatal:true}).decode(Uint8Array.from(atob(value.replace(/-/g,'+').replace(/_/g,'/')), c=>c.charCodeAt(0))));
+    result.textContent = JSON.stringify({header:parse(parts[0]), claims:parse(parts[1])}, null, 2);
+    document.getElementById('status').textContent = '未検証です。iss / sub / jwks / authority_hints / federation_fetch_endpointを確認してください。';
+  } catch(e) {result.textContent='';document.getElementById('status').textContent=e.message;}
+});
+</script></body></html>
