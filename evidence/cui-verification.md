@@ -53,8 +53,13 @@ PASS: AnchorのEntity ConfigurationをAに事前設定した公開鍵で検証
 NOT_TRUSTED: MISSING_SUBORDINATE: Anchorが対象について発行したStatementがない
 ```
 
+## 新規cloneからの再現
+
+GitHubの [4f9b58ac0207198142cd5bd7cf2a02cfcbcbf468](https://github.com/takuma-8trees/openid-federation-handson/tree/4f9b58ac0207198142cd5bd7cf2a02cfcbcbf468/cui) を別ディレクトリへcloneし、READMEのビルド・起動・B/Cの操作を `run/smoke-test.sh` で再現。**成功**。
+
+既存実行環境と分離するため、`COMPOSE_PROJECT_NAME=oidf-cui-replay`、`CUI_SUBNET=10.203.189.0/24` を設定した以外は追加入力なし。専用の新規ボリュームで鍵が生成され、作業用環境とはAnchor thumbprintが異なることも確認。再現用コンテナとネットワークは `docker compose down` で停止・削除済み。元のCUI環境と旧UI環境は保持。
+
 ## 残る確認
 
-- GitHubから新規cloneしての再現：実施後に追記。
 - 読者としての操作感：ユーザーの受け入れ確認はこれから。
 - 仕様全体への適合性、任意の外部Federationとの相互接続、OIDCフローは検証対象外。
