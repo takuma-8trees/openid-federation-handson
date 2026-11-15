@@ -5,6 +5,6 @@
 - JUnit Jupiter 5.11.4: test dependency, Eclipse Public License 2.0. Not included as an application dependency.
 - Eclipse Temurin / Maven container images: upstream software and licenses apply. Images are built/pulled by the reader, not republished by this repository.
 
-Design reference: user-supplied `ai-sdp-cross-ecosystem-trust-codex-crud-federation-trust.zip`, particularly `agentic-mesh/FEDERATION.md`, the offline material generator and Nimbus validation extension. This repository implements a separate browser-based teaching application; it does not redistribute the original project, its secrets, or its Keycloak extensions.
+Design reference: user-supplied `ai-sdp-cross-ecosystem-trust-codex-crud-federation-trust.zip`, particularly `agentic-mesh/FEDERATION.md`, the offline material generator and Nimbus validation extension. This repository implements an independent CUI teaching application in `cui/`, and preserves an older browser prototype at the root. It does not redistribute the original project, its secrets, or its Keycloak extensions.
 
 The normative reference is OpenID Federation 1.0 Final, not the behavior of a third-party implementation. This teaching subset is not a certification or a claim of full specification conformance.

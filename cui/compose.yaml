@@ -1,0 +1,49 @@
+name: oidf-cui
+x-actor: &actor
+  image: oidf-cui:local
+  build: .
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: [/tmp]
+  depends_on:
+    init:
+      condition: service_completed_successfully
+services:
+  init:
+    image: oidf-cui:local
+    build: .
+    user: "0"
+    entrypoint: ["sh", "-c", "java -jar /app/app.jar init && chown -R 10001:10001 /material"]
+    volumes:
+      - a-data:/material/a
+      - b-data:/material/entity-b
+      - c-data:/material/entity-c
+      - anchor-data:/material/trust-anchor
+  entity-a:
+    <<: *actor
+    command: [idle]
+    volumes: [a-data:/data]
+  entity-b:
+    <<: *actor
+    command: [serve, entity-b]
+    volumes: [b-data:/data:ro]
+  entity-c:
+    <<: *actor
+    command: [serve, entity-c]
+    volumes: [c-data:/data:ro]
+  trust-anchor:
+    <<: *actor
+    command: [serve, trust-anchor]
+    volumes: [anchor-data:/data:ro]
+volumes:
+  a-data:
+  b-data:
+  c-data:
+  anchor-data:
+networks:
+  default:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${CUI_SUBNET:-10.203.188.0/24}
