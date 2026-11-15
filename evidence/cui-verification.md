@@ -12,7 +12,7 @@ Entity AにSwagger UI 5.34.1とOpenAPI 3.0.3の教材用操作APIを追加。A�
 - 不正な対象は404、GETによるfetchは405を確認。
 - ブラウザーのSwagger UIで4操作の表示、Try it out、Bのfetchの200/UNVERIFIED、Cのverifyの422/MISSING_SUBORDINATEを実際に確認。
 - Swagger資材は公式npm配布5.34.1をSHA-512検証してビルドへ同梱。ブラウザー側で外部CDNを使わない構成。
-- Swagger追加版の新規clone再現：実施後に追記。
+- Swagger追加版の新規clone再現：**成功**。[78464c3eb51c9f5d071bcbbb2ed0212c366b27e6](https://github.com/takuma-8trees/openid-federation-handson/tree/78464c3eb51c9f5d071bcbbb2ed0212c366b27e6/cui) をGitHubからclone。専用プロジェクト `oidf-swagger-replay`、新規ボリューム、内部subnet 10.203.189.0/24、入口subnet 10.203.191.0/24、公開port 18767で `up --build` → `smoke-api.sh http://localhost:18767 --fresh` → `smoke-test.sh` が成功。取得前のB/Cのshow・verifyが409になることも確認。再現用コンテナ・ネットワークはdown済み。
 
 ## 実行環境
 
