@@ -1,5 +1,7 @@
 # Third-party components and provenance
 
+- Swagger UI / swagger-ui-dist 5.34.1: Apache License 2.0. https://github.com/swagger-api/swagger-ui/tree/v5.34.1 . Official npm distribution is downloaded at Docker build time and checked against a pinned SHA-512. LICENSE, NOTICE (when included), and bundled license files are retained in application resources. Swagger UI assets are served locally by Entity A.
+
 - Nimbus OAuth 2.0 / OpenID Connect SDK 11.38.2: Apache License 2.0. https://connect2id.com/products/nimbus-oauth-openid-connect-sdk
 - Nimbus JOSE + JWT and transitive dependencies are resolved by Maven. Their upstream license/notice files remain in their distributed JARs; the shaded application JAR is a build artifact, not committed here.
 - JUnit Jupiter 5.11.4: test dependency, Eclipse Public License 2.0. Not included as an application dependency.

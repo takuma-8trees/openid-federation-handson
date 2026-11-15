@@ -22,7 +22,9 @@ services:
       - anchor-data:/material/trust-anchor
   entity-a:
     <<: *actor
-    command: [idle]
+    command: [api]
+    ports: ["127.0.0.1:${A_PORT:-18766}:8080"]
+    networks: [default, entry]
     volumes: [a-data:/data]
   entity-b:
     <<: *actor
@@ -42,6 +44,10 @@ volumes:
   c-data:
   anchor-data:
 networks:
+  entry:
+    ipam:
+      config:
+        - subnet: ${A_SUBNET:-10.203.190.0/24}
   default:
     internal: true
     ipam:

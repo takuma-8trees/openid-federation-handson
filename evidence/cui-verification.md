@@ -2,6 +2,18 @@
 
 実測日：2026-11-15。旧UI版の [verification.md](verification.md) とは別の記録です。
 
+## Swagger UI追加（2026-11-15）
+
+Entity AにSwagger UI 5.34.1とOpenAPI 3.0.3の教材用操作APIを追加。Aだけをlocalhost:18766で公開し、B/C/Anchorは内部HTTPSのままです。以下の既存CUI検証結果は追加前の記録で、当時はホスト公開ポートなしでした。
+
+- 暗号検証のJUnit 7件：成功。既存CUIのsmoke：成功。
+- `run/smoke-api.sh`：Bの取得・未検証表示・200/TRUSTED、Cの取得・欠損表示・422/NOT_TRUSTEDを確認。
+- APIが返すclaimsのiss/sub、Cのnot_found、取得・表示・検証でfetched_atが変わらないことをassert。
+- 不正な対象は404、GETによるfetchは405を確認。
+- ブラウザーのSwagger UIで4操作の表示、Try it out、Bのfetchの200/UNVERIFIED、Cのverifyの422/MISSING_SUBORDINATEを実際に確認。
+- Swagger資材は公式npm配布5.34.1をSHA-512検証してビルドへ同梱。ブラウザー側で外部CDNを使わない構成。
+- Swagger追加版の新規clone再現：実施後に追記。
+
 ## 実行環境
 
 - WindowsホストのWSL、Ubuntu 24.04.3 LTS、ARM64。
