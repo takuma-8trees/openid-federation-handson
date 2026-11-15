@@ -1,0 +1,15 @@
+services:
+  lab:
+    build: .
+    environment:
+      BIND_ADDRESS: 0.0.0.0
+    ports:
+      - "127.0.0.1:18765:8080"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${LAB_SUBNET:-10.203.187.0/24}
