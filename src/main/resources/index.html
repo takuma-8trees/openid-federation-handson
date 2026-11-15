@@ -21,7 +21,7 @@ $('run').onclick=async()=>{let button=$('run');button.disabled=true;$('error').t
 const scenarioLabel=$('scenario').selectedOptions[0].text, trustLabel=$('trust').selectedOptions[0].text;
 let response=await fetch('/api/experiment?'+new URLSearchParams({scenario:$('scenario').value,trust:$('trust').value}));if(!response.ok)throw Error('検証サービスへの接続に失敗しました。');let r=await response.json();
 let panel=$('result');panel.className='card result '+(r.accepted?'good':'bad');panel.replaceChildren(el('h2','2. 検証の経路を確認する'),el('span',r.accepted?'受け入れ':'拒否','badge'));
-panel.append(el('p',r.trust==='other'?'受け取ったAnchor文書が自己署名されていても、Bが固定した信頼の起点と合わないため拒否します。':meanings[r.scenario]));
+panel.append(el('p',r.trust==='other' && r.checks.length===2?'受け取ったAnchor文書が自己署名されていても、Bが固定した信頼の起点と合わないため拒否します。':meanings[r.scenario]));
 let list=document.createElement('ol');r.checks.forEach(c=>list.append(el('li',(c.ok?'✓ ':'✕ ')+c.label,c.ok?'pass':'fail')));panel.append(list);
 let keys=el('div','','keys');[['Bが固定したAnchor鍵',r.keys.pinned],['文書を発行したAnchor鍵',r.keys.anchor],['AのFederation署名鍵',r.keys.federation],['Aのトークン署名鍵',r.keys.token]].forEach(([label,value])=>{let k=el('div',label,'key');k.append(el('code',value));keys.append(k)});panel.append(keys,el('p','表示は公開鍵のSHA-256 JWK Thumbprintです。最初の2つを比較してください。','help'));
 let docs=$('docs');docs.replaceChildren();r.documents.forEach(d=>docs.append(documentView(d.label,d.claims,d.jwt)));docs.append(documentView('AがBへ提示するサンプルJWT（ID Tokenではありません）',r.assertion.claims,r.assertion.jwt));$('documents').hidden=false;

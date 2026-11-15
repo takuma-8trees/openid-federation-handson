@@ -17,7 +17,7 @@
 - Composeビルド・起動成功。コンテナ内でJUnit 3件成功。HTTPスモークテスト7ケース（正常、起点不一致、改ざん、期限切れ、未登録鍵、JWT鍵不一致、正常復旧）すべて成功。
 - WindowsブラウザーからWSL上のDocker版へ接続し、正常な4段階の検証成功と署名文書の展開表示を確認。
 - 既存Docker環境の自動サブネット割当が枯渇していたため、他のネットワークを削除せず専用サブネットを設定。LAB_SUBNETで変更可能。
-- 新規clone検証は後述。
+- GitHubから別ディレクトリへ新規cloneし、`3c38ee43176c869ff91d64dc7fd65ee2854e4221`をcheckout。`docker compose up --build -d`と`sh run/smoke-test.sh`で7ケースすべて成功。既存の鍵・DB・設定ファイルを流用せず再現した。Dockerのベースイメージ/ビルドキャッシュは使用。
 
 ## 範囲
 
