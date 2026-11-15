@@ -20,7 +20,7 @@
 - 正式HTTPS curl手順：AのcurlでB EC・Anchor EC・BのSubordinate Statementを個別に取得。`--cacert`でホスト名・証明書を検証し、保存ファイルを `verify-files` で検証成功。
 - JUnit：7件、failure/error/skippedはすべて0。
 - 起動直後の接続失敗を避けるため各サービスにhealthcheckを追加し、READMEでは `up --build --wait -d` を使用。
-- 新規cloneの再現結果は完了後に追記する。
+- 新規clone：[7ba510657cd1318bc0bddbc0a79dec00bbf1052d](https://github.com/takuma-8trees/openid-federation-handson/tree/7ba510657cd1318bc0bddbc0a79dec00bbf1052d/cui) をGitHubからcloneして成功。新規プロジェクト `oidf-standard-replay`、新規ボリューム、subnet 10.203.189.0/24・10.203.191.0/24、ports18866〜18869に分離し、`up --build --wait -d` → `smoke-endpoints.sh` → Aから証明書検証付きHTTPS GETが成功。再現用コンテナとネットワークはdown済み。
 
 ## 境界
 
