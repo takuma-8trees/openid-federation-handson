@@ -26,4 +26,3 @@ public final class Main {
         e.getResponseHeaders().set("X-Content-Type-Options","nosniff");e.sendResponseHeaders(status,bytes.length);try(var s=e.getResponseBody()){s.write(bytes);}
     }
 }
-

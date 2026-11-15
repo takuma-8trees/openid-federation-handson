@@ -29,5 +29,3 @@ history.unshift([scenarioLabel,trustLabel,r.accepted?'受け入れ':'拒否']);h
 }catch(e){$('error').textContent=e.message;}finally{button.disabled=false;}};
 $('reset').onclick=()=>{$('scenario').value='normal';$('trust').value='anchor';$('run').click();};
 </script></html>
-
-

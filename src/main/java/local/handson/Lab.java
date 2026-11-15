@@ -84,4 +84,3 @@ public final class Lab {
         ok(out,"検証済みメタデータの鍵でAの提示JWTを検証。issuer・audience・期限も一致");
     }
 }
-
