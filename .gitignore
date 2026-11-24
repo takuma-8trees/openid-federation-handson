@@ -7,4 +7,4 @@ certs/*
 !certs/.gitkeep
 
 # Avoid accidental commit of local proxy CA dropped at repo root
-ZscalerRootCertificate-2048-SHA256.crt
+*.crt
