@@ -1,0 +1,73 @@
+name: oidf-demo
+x-image-build: &image_build
+  image: oidf-demo:local
+  build: .
+
+x-server: &server
+  <<: *image_build
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp
+  healthcheck:
+    test: [CMD, curl, -fsS, "http://localhost:8080/.well-known/openid-federation"]
+    interval: 10s
+    timeout: 3s
+    retries: 10
+  depends_on:
+    init:
+      condition: service_completed_successfully
+
+x-cli: &cli
+  <<: *image_build
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp
+  depends_on:
+    init:
+      condition: service_completed_successfully
+services:
+  init:
+    <<: *image_build
+    user: "0"
+    entrypoint: ["sh", "-c", "java -jar /app/app.jar init && chown -R 10001:10001 /material"]
+    volumes:
+      - a-data:/material/a
+      - trustee-data:/material/trustee
+      - anchor-data:/material/trust-anchor
+
+  trustor:
+    <<: *cli
+    entrypoint: [trustor]
+    command: [--help]
+    volumes:
+      - a-data:/data:ro
+      - ./inbox:/inbox:ro
+
+  trustee:
+    <<: *server
+    command: [serve, trustee]
+    ports: ["127.0.0.1:${B_PORT:-18767}:8080"]
+    volumes: [trustee-data:/data:ro]
+  trust-anchor:
+    <<: *server
+    command: [serve, trust-anchor]
+    ports: ["127.0.0.1:${TA_PORT:-18769}:8080"]
+    volumes: [anchor-data:/data:ro]
+volumes:
+  a-data:
+  trustee-data:
+  anchor-data:
+networks:
+  default:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${OIDF_SUBNET:-10.203.188.0/24}

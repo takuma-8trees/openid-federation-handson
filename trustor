@@ -1,0 +1,2 @@
+#!/bin/sh
+exec java -Djavax.net.ssl.trustStore=/data/tls-trust.p12 -Djavax.net.ssl.trustStorePassword=local-demo -jar /app/app.jar cli "$@"

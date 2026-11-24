@@ -1,17 +1,24 @@
 #!/bin/sh
 set -eu
-base=${1:-http://localhost:18765}
+cd "$(dirname "$0")/.."
+trustor() { docker compose run --rm -T trustor "$@"; }
+
 attempt=0
-until curl -fsS --max-time 3 "$base/" >/dev/null; do
-  attempt=$((attempt+1)); [ "$attempt" -lt 30 ] || exit 1
-  sleep 1
+until trustor chain fetch trustee > /tmp/oidf-demo-fetch-trustee.log 2>&1; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 20 ]; then cat /tmp/oidf-demo-fetch-trustee.log; exit 1; fi
+  sleep 2
 done
-check() {
-  body=$(curl -fsS --max-time 20 "$base/api/experiment?scenario=$1&trust=$2")
-  printf '%s' "$body" | grep -Eq '"accepted"[[:space:]]*:[[:space:]]*'"$3" || { echo "FAIL $1 / $2"; exit 1; }
-  echo "PASS $1 / $2 -> $3"
-}
-check normal anchor true
-check normal other false
-for scenario in tampered expired unregistered token-key; do check "$scenario" anchor false; done
-check normal anchor true
+
+cat /tmp/oidf-demo-fetch-trustee.log
+trustor trust show
+
+shown=$(trustor chain show trustee)
+printf '%s\n' "$shown"
+printf '%s\n' "$shown" | grep -Fq '[subordinate] iss=https://trust-anchor:8443'
+
+verified=$(trustor chain verify trustee)
+printf '%s\n' "$verified"
+printf '%s\n' "$verified" | grep -Fq 'TRUSTED: https://trustee:8443 -> https://trust-anchor:8443'
+
+echo 'PASS: Trustee chain verified.'
