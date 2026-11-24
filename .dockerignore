@@ -1,3 +1,7 @@
 .git
 target
-evidence
+.env
+inbox
+.agents
+.aws
+.codex
